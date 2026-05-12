@@ -32,19 +32,76 @@
       <details class="register-box">
         <summary>Não tem ainda uma Conta? Crie!</summary>
         <form class="ticket-form register-grid" ng-submit="vm.signUp()">
-          <input type="email" ng-model="vm.register.email" placeholder="Email" required>
+          <input type="email" ng-model="vm.register.email" placeholder="E-mail" required>
           <input type="password" ng-model="vm.register.password" placeholder="Senha" required>
-          <input type="text" ng-model="vm.register.full_name" placeholder="Nome Completo" required>
-          <input type="text" ng-model="vm.register.employee_id" placeholder="Registro/RE" required>
-          <input type="text" ng-model="vm.register.department" placeholder="Departamento" required>
-          <input type="text" ng-model="vm.register.job_title" placeholder="Cargo" required>
-          <input type="text" ng-model="vm.register.branch" placeholder="Unidade/Filial">
-          <input type="text" ng-model="vm.register.block_floor" placeholder="Bloco/Andar">
-          <input type="tel" ng-model="vm.register.phone_ext" placeholder="Telefone/Ramal" inputmode="tel">
-          <select ng-model="vm.register.technical_level">
-            <option value="Doer">Doer</option>
-            <option value="Supported">Supported</option>
+          <input type="text" ng-model="vm.register.legal_first_name" placeholder="Nome legal" maxlength="80" required>
+          <input type="text" ng-model="vm.register.last_name" placeholder="Sobrenome" maxlength="80" required>
+          <input type="date" ng-model="vm.register.birth_date" ng-attr-max="{{ vm.maxBirthDate }}" required>
+          <input type="text" ng-model="vm.register.document_number" placeholder="Documento" maxlength="30" required>
+          <select ng-model="vm.register.document_country" required>
+            <option value="" disabled>Pais emissor</option>
+            <option value="Brasil">Brasil</option>
+            <option value="Argentina">Argentina</option>
+            <option value="Chile">Chile</option>
+            <option value="Uruguai">Uruguai</option>
+            <option value="Paraguai">Paraguai</option>
+            <option value="Estados Unidos">Estados Unidos</option>
+            <option value="Canada">Canada</option>
+            <option value="Mexico">Mexico</option>
+            <option value="Portugal">Portugal</option>
+            <option value="Espanha">Espanha</option>
+            <option value="Franca">Franca</option>
+            <option value="Alemanha">Alemanha</option>
+            <option value="Italia">Italia</option>
+            <option value="Reino Unido">Reino Unido</option>
+            <option value="Outro">Outro</option>
           </select>
+          <select ng-model="vm.register.nationality" required>
+            <option value="" disabled>Nacionalidade</option>
+            <option value="Brasileira">Brasileira</option>
+            <option value="Argentina">Argentina</option>
+            <option value="Chilena">Chilena</option>
+            <option value="Uruguaia">Uruguaia</option>
+            <option value="Paraguaia">Paraguaia</option>
+            <option value="Americana">Americana</option>
+            <option value="Canadense">Canadense</option>
+            <option value="Mexicana">Mexicana</option>
+            <option value="Portuguesa">Portuguesa</option>
+            <option value="Espanhola">Espanhola</option>
+            <option value="Francesa">Francesa</option>
+            <option value="Alema">Alema</option>
+            <option value="Italiana">Italiana</option>
+            <option value="Britanica">Britanica</option>
+            <option value="Outra">Outra</option>
+          </select>
+          <select ng-model="vm.register.gender">
+            <option value="">Genero</option>
+            <option value="Feminino">Feminino</option>
+            <option value="Masculino">Masculino</option>
+            <option value="Outro">Outro</option>
+            <option value="Prefiro nao informar">Prefiro nao informar</option>
+          </select>
+          <input type="tel" ng-model="vm.register.phone_number" placeholder="Celular" maxlength="20" inputmode="tel" required>
+          <select ng-model="vm.register.country" required>
+            <option value="" disabled>Pais</option>
+            <option value="Brasil">Brasil</option>
+            <option value="Argentina">Argentina</option>
+            <option value="Chile">Chile</option>
+            <option value="Uruguai">Uruguai</option>
+            <option value="Paraguai">Paraguai</option>
+            <option value="Estados Unidos">Estados Unidos</option>
+            <option value="Canada">Canada</option>
+            <option value="Mexico">Mexico</option>
+            <option value="Portugal">Portugal</option>
+            <option value="Espanha">Espanha</option>
+            <option value="Franca">Franca</option>
+            <option value="Alemanha">Alemanha</option>
+            <option value="Italia">Italia</option>
+            <option value="Reino Unido">Reino Unido</option>
+            <option value="Outro">Outro</option>
+          </select>
+          <input type="text" ng-model="vm.register.state" placeholder="Estado" maxlength="80" required>
+          <input type="text" ng-model="vm.register.city" placeholder="Cidade" maxlength="100" required>
           <button type="submit" class="bounce-btn" ng-disabled="vm.auth.loading || vm.authLocked">Registrar</button>
         </form>
       </details>

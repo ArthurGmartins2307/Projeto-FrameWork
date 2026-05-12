@@ -1,0 +1,27 @@
+Exemplo de um possível Chamado: Bagagem Extraviada >
+
+
+Assunto >	Bagagem extraviada no voo FON3721
+
+Localizador (PNR) >	K4M9XP
+
+Número do Voo>  FON3721
+
+Origem (IATA) > 	GRU
+
+Destino (IATA) > 	LIS
+
+Passageiro >	Mariana Costa Almeida
+
+E-mail >	mariana.almeida@email.com
+
+Telefone >	(11) 98765-4321
+
+Categoria >	Bagagem
+
+Tipo de Ocorrência >	Extraviada (AHL)
+
+Tag de Bagagem > FON37210511
+
+Descrição >	Mala preta rígida marca Samsonite, despachada no check-in às 21:30. Não apareceu na esteira de restituição. Apresentei o comprovante de despacho no balcão.
+

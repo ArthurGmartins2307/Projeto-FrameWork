@@ -1,6 +1,8 @@
 (function () {
   "use strict";
 
+  console.log("[HelpOn] app.js carregado - build cadastro debug 2026-05");
+
   /**
    * Supabase (produção / mobile):
    * - Authentication → URL Configuration: Site URL e Redirect URLs devem usar a URL pública do app,
@@ -12,9 +14,14 @@
 
   function getAuthEmailRedirectTo() {
     if (typeof window !== "undefined" && window.location && window.location.origin) {
-      return window.location.origin + "/auth/confirm";
+      var path = window.location.pathname || "/";
+      path = path.replace(/\/index\.html$/i, "/");
+      if (path.charAt(path.length - 1) !== "/") {
+        path += "/";
+      }
+      return window.location.origin + path + "#!/auth/confirm";
     }
-    return "/auth/confirm";
+    return "/#!/auth/confirm";
   }
 
   angular
@@ -141,7 +148,7 @@
           var accessToken = params.get("access_token");
           var refreshToken = params.get("refresh_token");
 
-          if (accessToken && refreshToken) {
+          if (accessToken && refreshToken && SupabaseService.client) {
             SupabaseService.client.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken
@@ -180,24 +187,83 @@
   function SupabaseService($q) {
     var SUPABASE_URL = "https://xuevhgvbrscyxwvklbke.supabase.co";
     var SUPABASE_ANON_KEY = "sb_publishable_pXGDbChVanUln742FRe5iA_a1fxM9Jj";
+    var configError = null;
+
+    function isValidSupabaseUrl(value) {
+      return /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(String(value || ""));
+    }
+
+    function isValidPublicKey(value) {
+      var key = String(value || "");
+      return key.length > 20 && key.indexOf("YOUR_SUPABASE") === -1;
+    }
+
+    function getSafeError(error) {
+      return {
+        name: error && error.name,
+        message: error && error.message,
+        status: error && error.status,
+        code: error && error.code
+      };
+    }
+
+    function testSupabaseConnectivity() {
+      return fetch(SUPABASE_URL + "/auth/v1/settings", {
+        headers: {
+          apikey: SUPABASE_ANON_KEY
+        }
+      })
+        .then(function (r) {
+          console.log("[HelpOn][Supabase connectivity]", r.status, r.statusText);
+          return r.text();
+        })
+        .then(function (text) {
+          console.log("[HelpOn][Supabase connectivity body]", text.slice(0, 300));
+          return text;
+        })
+        .catch(function (error) {
+          console.error("[HelpOn][Supabase connectivity failed]", error);
+          throw error;
+        });
+    }
 
     function assertConfigured() {
-      if (SUPABASE_URL.indexOf("YOUR_PROJECT_REF") !== -1 || SUPABASE_ANON_KEY.indexOf("YOUR_SUPABASE") !== -1) {
-        return $q.reject(new Error("Configure SUPABASE_URL e SUPABASE_ANON_KEY em app.js."));
+      if (configError) {
+        return $q.reject(configError);
+      }
+      if (!isValidSupabaseUrl(SUPABASE_URL) || !isValidPublicKey(SUPABASE_ANON_KEY)) {
+        return $q.reject(new Error("Configuracao do Supabase invalida: verifique SUPABASE_URL e SUPABASE_ANON_KEY."));
       }
       return $q.resolve();
     }
 
     function createClient() {
+      if (!isValidSupabaseUrl(SUPABASE_URL) || !isValidPublicKey(SUPABASE_ANON_KEY)) {
+        throw new Error("Configuracao do Supabase invalida: verifique SUPABASE_URL e SUPABASE_ANON_KEY.");
+      }
+      if (!window.supabase || typeof window.supabase.createClient !== "function") {
+        throw new Error("Supabase JS nao foi carregado. Verifique o script CDN no index.html.");
+      }
       return window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         auth: { persistSession: true, autoRefreshToken: true }
       });
     }
 
-    var client = createClient();
+    var client = null;
+    try {
+      client = createClient();
+    } catch (error) {
+      configError = error;
+      console.error("[HelpOn][Supabase] Client init error:", getSafeError(error));
+    }
+
+    window.HelpOnDiagnostics = window.HelpOnDiagnostics || {};
+    window.HelpOnDiagnostics.testSupabaseConnectivity = testSupabaseConnectivity;
 
     return {
       client: client,
+      getSafeError: getSafeError,
+      testSupabaseConnectivity: testSupabaseConnectivity,
       assertConfigured: assertConfigured
     };
   }
@@ -205,9 +271,70 @@
   function localizeErrorMessage(error) {
     var raw = (error && (error.message || error.error_description || error.msg)) || "Falha desconhecida.";
     var message = String(raw).toLowerCase();
+    var status = Number(error && error.status);
+    var code = String((error && (error.code || error.error_code)) || "").toLowerCase();
+    var name = String((error && error.name) || "").toLowerCase();
 
+    if (message.indexOf("supabase js nao foi carregado") !== -1) {
+      return "Supabase JS nao foi carregado. Verifique o script CDN no index.html.";
+    }
+    if (message.indexOf("configuracao do supabase invalida") !== -1) {
+      return "Configuracao do Supabase invalida: verifique SUPABASE_URL e SUPABASE_ANON_KEY.";
+    }
+    if (
+      name === "typeerror" ||
+      message.indexOf("failed to fetch") !== -1 ||
+      message.indexOf("networkerror") !== -1 ||
+      message.indexOf("load failed") !== -1 ||
+      message.indexOf("network request failed") !== -1 ||
+      message.indexOf("cors") !== -1
+    ) {
+      return "Nao foi possivel conectar ao Supabase. Verifique conexao, CORS, bloqueadores ou disponibilidade do projeto.";
+    }
+    if (
+      code.indexOf("invalid_api_key") !== -1 ||
+      message.indexOf("invalid api key") !== -1 ||
+      message.indexOf("api key") !== -1 ||
+      message.indexOf("project not found") !== -1 ||
+      message.indexOf("supabase_url") !== -1 ||
+      message.indexOf("supabase_anon_key") !== -1
+    ) {
+      return "Configuracao do Supabase invalida. Verifique URL e chave anonima do projeto.";
+    }
+    if (
+      code.indexOf("validation_failed") !== -1 && message.indexOf("redirect") !== -1 ||
+      message.indexOf("redirect") !== -1 ||
+      (message.indexOf("not allowed") !== -1 && message.indexOf("url") !== -1) ||
+      message.indexOf("site url") !== -1
+    ) {
+      return "Configuracao de redirecionamento do cadastro invalida. Verifique as URLs no Supabase.";
+    }
+    if (
+      code.indexOf("signup_disabled") !== -1 ||
+      (message.indexOf("signup") !== -1 && message.indexOf("disabled") !== -1) ||
+      message.indexOf("signups not allowed") !== -1 ||
+      message.indexOf("provider is not enabled") !== -1
+    ) {
+      return "Cadastro por e-mail desativado no Supabase.";
+    }
+    if (
+      status === 429 ||
+      code.indexOf("rate_limit") !== -1 ||
+      message.indexOf("rate limit") !== -1 ||
+      message.indexOf("too many") !== -1 ||
+      message.indexOf("over_email_send_rate_limit") !== -1
+    ) {
+      return "Muitas tentativas. Aguarde alguns minutos e tente novamente.";
+    }
+    if (
+      status >= 500 && message.indexOf("database") !== -1 ||
+      message.indexOf("database error saving new user") !== -1 ||
+      message.indexOf("error saving new user") !== -1
+    ) {
+      return "Erro ao criar perfil do usuario no Supabase. Verifique triggers, tabela profiles e migration SQL.";
+    }
     if (message.indexOf("row-level security policy") !== -1) {
-      return "Permissão negada pela política de segurança (RLS). Faça login e tente novamente.";
+      return "Nao foi possivel salvar ou acessar o perfil. Verifique as policies RLS no Supabase.";
     }
     if (message.indexOf("invalid login credentials") !== -1) {
       return "E-mail ou senha inválidos.";
@@ -218,19 +345,27 @@
     if (message.indexOf("otp_expired") !== -1 || message.indexOf("invalid or has expired") !== -1) {
       return "O link de e-mail expirou ou já foi utilizado.";
     }
-    if (message.indexOf("user already registered") !== -1) {
+    if (
+      message.indexOf("user already registered") !== -1 ||
+      message.indexOf("already registered") !== -1 ||
+      message.indexOf("already exists") !== -1
+    ) {
       return "Este e-mail já está cadastrado.";
     }
-    if (message.indexOf("password should be at least") !== -1) {
+    if (
+      message.indexOf("password should be at least") !== -1 ||
+      message.indexOf("weak password") !== -1 ||
+      (message.indexOf("password") !== -1 && message.indexOf("characters") !== -1)
+    ) {
       return "A senha deve ter pelo menos 6 caracteres.";
     }
-    if (message.indexOf("network") !== -1 || message.indexOf("fetch") !== -1) {
-      return "Falha de conexão com o Supabase. Verifique sua internet.";
+    if (message.indexOf("network") !== -1 || message.indexOf("fetch") !== -1 || message.indexOf("cors") !== -1) {
+      return "Nao foi possivel conectar ao Supabase. Verifique conexao, CORS, bloqueadores ou disponibilidade do projeto.";
     }
     if (message.indexOf("jwt") !== -1) {
       return "Sua sessão expirou. Faça login novamente.";
     }
-    return raw;
+    return "Nao foi possivel concluir a operacao. Veja o console para detalhes tecnicos.";
   }
 
   AuthService.$inject = ["$q", "SupabaseService", "$sanitize"];
@@ -243,6 +378,37 @@
 
     function sanitizeText(input) {
       return $sanitize(String(input || "")).trim();
+    }
+
+    function normalizeDateInput(input) {
+      if (!input) {
+        return "";
+      }
+      if (input instanceof Date && !isNaN(input.getTime())) {
+        return input.toISOString().slice(0, 10);
+      }
+      return sanitizeText(input).slice(0, 10);
+    }
+
+    function buildProfileMetadata(profileData) {
+      var source = profileData || {};
+      var legalFirstName = sanitizeText(source.legal_first_name);
+      var lastName = sanitizeText(source.last_name);
+      return {
+        legal_first_name: legalFirstName,
+        last_name: lastName,
+        full_name: sanitizeText((legalFirstName + " " + lastName).trim()),
+        birth_date: normalizeDateInput(source.birth_date),
+        document_number: sanitizeText(source.document_number),
+        document_country: sanitizeText(source.document_country),
+        nationality: sanitizeText(source.nationality),
+        gender: sanitizeText(source.gender),
+        phone_number: sanitizeText(source.phone_number),
+        country: sanitizeText(source.country),
+        state: sanitizeText(source.state),
+        city: sanitizeText(source.city),
+        role: "user"
+      };
     }
 
     function getLockUntil() {
@@ -273,6 +439,7 @@
 
     function hasValidJwt() {
       try {
+        if (!client || !client.supabaseUrl) { return false; }
         var raw = window.localStorage.getItem("sb-" + client.supabaseUrl.split("//")[1].split(".")[0] + "-auth-token");
         if (!raw) { return false; }
         var parsed = JSON.parse(raw);
@@ -315,13 +482,27 @@
             emailRedirectTo: getAuthEmailRedirectTo()
           };
           if (profileData) {
-            options.data = profileData;
+            options.data = buildProfileMetadata(profileData);
           }
+          console.log("[HelpOn][signUp] Calling Supabase Auth signup", {
+            redirectTo: getAuthEmailRedirectTo(),
+            hasClient: !!client,
+            hasSupabase: !!window.supabase
+          });
           return $q.when(client.auth.signUp({
             email: sanitizeText(email),
             password: sanitizeText(password),
             options: options
-          }));
+          })).then(function (res) {
+            if (res && res.error) {
+              console.error("[HelpOn][signUp] Auth response error:", SupabaseService.getSafeError(res.error));
+              throw res.error;
+            }
+            return res;
+          }).catch(function (error) {
+            console.error("[HelpOn][signUp] Supabase error:", SupabaseService.getSafeError(error));
+            throw error;
+          });
         });
       },
       resendSignup: function (email) {
@@ -358,23 +539,70 @@
     var PROFILE_KEY = "helpon_profile_complete";
     var PENDING_PROFILE_PREFIX = "helpon_pending_profile_";
 
+    function normalizeDateInput(input) {
+      if (!input) {
+        return "";
+      }
+      if (input instanceof Date && !isNaN(input.getTime())) {
+        return input.toISOString().slice(0, 10);
+      }
+      return AuthService.sanitizeText(input).slice(0, 10);
+    }
+
+    function isFutureDate(value) {
+      var date = new Date(value);
+      if (isNaN(date.getTime())) {
+        return false;
+      }
+      date.setHours(0, 0, 0, 0);
+      var today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return date.getTime() > today.getTime();
+    }
+
+    function normalizeRole(value) {
+      var role = AuthService.sanitizeText(value || "user");
+      return role === "admin" || role === "agent" || role === "user" ? role : "user";
+    }
+
     function mapProfile(payload, userId) {
+      payload = payload || {};
+      var legalFirstName = AuthService.sanitizeText(payload.legal_first_name);
+      var lastName = AuthService.sanitizeText(payload.last_name);
+      var fullName = AuthService.sanitizeText((legalFirstName + " " + lastName).trim());
       return {
         id: userId,
-        full_name: AuthService.sanitizeText(payload.full_name),
-        employee_id: AuthService.sanitizeText(payload.employee_id),
-        department: AuthService.sanitizeText(payload.department),
-        job_title: AuthService.sanitizeText(payload.job_title),
-        branch: AuthService.sanitizeText(payload.branch),
-        block_floor: AuthService.sanitizeText(payload.block_floor),
-        phone_ext: AuthService.sanitizeText(payload.phone_ext),
-        technical_level: AuthService.sanitizeText(payload.technical_level || "Supported"),
-        role: AuthService.sanitizeText(payload.role || "user")
+        legal_first_name: legalFirstName,
+        last_name: lastName,
+        full_name: fullName,
+        birth_date: normalizeDateInput(payload.birth_date),
+        document_number: AuthService.sanitizeText(payload.document_number),
+        document_country: AuthService.sanitizeText(payload.document_country),
+        nationality: AuthService.sanitizeText(payload.nationality),
+        gender: AuthService.sanitizeText(payload.gender),
+        phone_number: AuthService.sanitizeText(payload.phone_number),
+        country: AuthService.sanitizeText(payload.country),
+        state: AuthService.sanitizeText(payload.state),
+        city: AuthService.sanitizeText(payload.city),
+        role: normalizeRole(payload.role)
       };
     }
 
     function isComplete(profile) {
-      return Boolean(profile && profile.employee_id && profile.department);
+      return Boolean(
+        profile &&
+        profile.legal_first_name &&
+        profile.last_name &&
+        profile.birth_date &&
+        !isFutureDate(profile.birth_date) &&
+        profile.document_number &&
+        profile.document_country &&
+        profile.nationality &&
+        profile.phone_number &&
+        profile.country &&
+        profile.state &&
+        profile.city
+      );
     }
 
     return {
@@ -1083,17 +1311,21 @@
     vm.linkExpiredDetail = "";
     vm.errorLinkEmail = vm.pendingEmail || "";
     vm.auth = { email: "", password: "", loading: false };
+    vm.maxBirthDate = new Date().toISOString().slice(0, 10);
     vm.register = {
       email: "",
       password: "",
-      full_name: "",
-      employee_id: "",
-      department: "",
-      job_title: "",
-      branch: "",
-      block_floor: "",
-      phone_ext: "",
-      technical_level: "Supported",
+      legal_first_name: "",
+      last_name: "",
+      birth_date: "",
+      document_number: "",
+      document_country: "",
+      nationality: "",
+      gender: "",
+      phone_number: "",
+      country: "",
+      state: "",
+      city: "",
       role: "user"
     };
     vm.profile = null;
@@ -1312,8 +1544,44 @@
     };
 
     vm.signUp = function () {
+      console.log("[HelpOn][signUp] Submit triggered");
+      console.log("[HelpOn][signUp] Register keys:", Object.keys(vm.register || {}));
+      var requiredFields = [
+        "email",
+        "password",
+        "legal_first_name",
+        "last_name",
+        "birth_date",
+        "document_number",
+        "document_country",
+        "nationality",
+        "phone_number",
+        "country",
+        "state",
+        "city"
+      ];
+      var missingFields = requiredFields.filter(function (field) {
+        return !String(vm.register[field] || "").trim();
+      });
+      if (missingFields.length) {
+        console.warn("[HelpOn][signUp] Missing fields:", missingFields);
+        vm.message = "Preencha todos os campos obrigatórios.";
+        return;
+      }
+      var birthDate = vm.register.birth_date instanceof Date ? vm.register.birth_date : new Date(vm.register.birth_date);
+      if (birthDate && !isNaN(birthDate.getTime())) {
+        var today = new Date();
+        today.setHours(0, 0, 0, 0);
+        birthDate.setHours(0, 0, 0, 0);
+        if (birthDate.getTime() > today.getTime()) {
+          vm.message = "A data de nascimento nao pode ser futura.";
+          return;
+        }
+      }
       vm.auth.loading = true;
-      AuthService.signUp(vm.register.email, vm.register.password).then(function (res) {
+      var registerProfile = angular.copy(vm.register);
+      delete registerProfile.password;
+      AuthService.signUp(vm.register.email, vm.register.password, registerProfile).then(function (res) {
         if (res.error) { throw res.error; }
         var session = res.data && res.data.session;
         var user = res.data.user;
@@ -1322,17 +1590,23 @@
           return;
         }
         if (!session || !session.user) {
-          ProfileService.storePendingProfile(vm.register, user.id);
+          ProfileService.storePendingProfile(registerProfile, user.id);
           vm.pendingEmail = vm.register.email;
           window.sessionStorage.setItem("helpon_pending_email", vm.pendingEmail);
           vm.message = "";
           $location.path("/auth/check-inbox");
           return;
         }
-        return ProfileService.upsertProfile(vm.register, user.id).then(function () {
-          vm.message = "Conta criada e perfil corporativo salvo.";
+        return ProfileService.upsertProfile(registerProfile, user.id).then(function () {
+          vm.pendingEmail = vm.register.email;
+          window.sessionStorage.setItem("helpon_pending_email", vm.pendingEmail);
+          vm.message = "Conta criada. Verifique seu e-mail para confirmar o cadastro.";
+          $location.path("/auth/check-inbox");
         });
-      }).catch(handleError).finally(function () {
+      }).catch(function (error) {
+        console.error("[HelpOn][signUp] Flow error:", SupabaseService.getSafeError(error));
+        handleError(error);
+      }).finally(function () {
         vm.auth.loading = false;
         refreshLockStatus();
         safeApply();
@@ -1718,6 +1992,20 @@
       ]).then(function (all) {
         vm.comments = all[0];
         vm.history = all[1];
+        // Add synthetic creation event as first item
+        var requesterName = ticket.requester_name || "Usuário";
+        var creationEvent = {
+          id: "creation_" + ticket.id,
+          action: "ticket_created",
+          action_label: "abriu o chamado",
+          actor_name: requesterName,
+          summary: requesterName + " abriu o chamado",
+          created_at: ticket.created_at,
+          old_label: "",
+          new_label: "",
+          is_creation_event: true
+        };
+        vm.history.unshift(creationEvent);
         if (vm.activeTab === "comments") {
           scrollCommentsToBottom(ticket.id);
         }
@@ -2364,20 +2652,39 @@
       },
       template:
         "<form class='ticket-form register-grid' ng-submit='submit()'>" +
-          "<input type='text' ng-model='form.full_name' placeholder='Nome Completo' required>" +
-          "<input type='text' ng-model='form.employee_id' placeholder='Registro/RE' required>" +
-          "<input type='text' ng-model='form.department' placeholder='Departamento' required>" +
-          "<input type='text' ng-model='form.job_title' placeholder='Cargo' required>" +
-          "<input type='text' ng-model='form.branch' placeholder='Unidade/Filial'>" +
-          "<input type='text' ng-model='form.block_floor' placeholder='Bloco/Andar'>" +
-          "<input type='tel' ng-model='form.phone_ext' placeholder='Telefone/Ramal' inputmode='tel'>" +
-          "<select ng-model='form.technical_level'>" +
-            "<option value='Doer'>Doer</option><option value='Supported'>Supported</option>" +
+          "<input type='text' ng-model='form.legal_first_name' placeholder='Nome legal' maxlength='80' required>" +
+          "<input type='text' ng-model='form.last_name' placeholder='Sobrenome' maxlength='80' required>" +
+          "<input type='date' ng-model='form.birth_date' ng-attr-max='{{ maxBirthDate }}' required>" +
+          "<input type='text' ng-model='form.document_number' placeholder='Documento' maxlength='30' required>" +
+          "<select ng-model='form.document_country' required>" +
+            "<option value='' disabled>Pais emissor</option>" +
+            "<option value='Brasil'>Brasil</option><option value='Argentina'>Argentina</option><option value='Chile'>Chile</option><option value='Uruguai'>Uruguai</option><option value='Paraguai'>Paraguai</option><option value='Estados Unidos'>Estados Unidos</option><option value='Canada'>Canada</option><option value='Mexico'>Mexico</option><option value='Portugal'>Portugal</option><option value='Espanha'>Espanha</option><option value='Franca'>Franca</option><option value='Alemanha'>Alemanha</option><option value='Italia'>Italia</option><option value='Reino Unido'>Reino Unido</option><option value='Outro'>Outro</option>" +
           "</select>" +
+          "<select ng-model='form.nationality' required>" +
+            "<option value='' disabled>Nacionalidade</option>" +
+            "<option value='Brasileira'>Brasileira</option><option value='Argentina'>Argentina</option><option value='Chilena'>Chilena</option><option value='Uruguaia'>Uruguaia</option><option value='Paraguaia'>Paraguaia</option><option value='Americana'>Americana</option><option value='Canadense'>Canadense</option><option value='Mexicana'>Mexicana</option><option value='Portuguesa'>Portuguesa</option><option value='Espanhola'>Espanhola</option><option value='Francesa'>Francesa</option><option value='Alema'>Alema</option><option value='Italiana'>Italiana</option><option value='Britanica'>Britanica</option><option value='Outra'>Outra</option>" +
+          "</select>" +
+          "<select ng-model='form.gender'>" +
+            "<option value=''>Genero</option><option value='Feminino'>Feminino</option><option value='Masculino'>Masculino</option><option value='Outro'>Outro</option><option value='Prefiro nao informar'>Prefiro nao informar</option>" +
+          "</select>" +
+          "<input type='tel' ng-model='form.phone_number' placeholder='Celular' maxlength='20' inputmode='tel' required>" +
+          "<select ng-model='form.country' required>" +
+            "<option value='' disabled>Pais</option>" +
+            "<option value='Brasil'>Brasil</option><option value='Argentina'>Argentina</option><option value='Chile'>Chile</option><option value='Uruguai'>Uruguai</option><option value='Paraguai'>Paraguai</option><option value='Estados Unidos'>Estados Unidos</option><option value='Canada'>Canada</option><option value='Mexico'>Mexico</option><option value='Portugal'>Portugal</option><option value='Espanha'>Espanha</option><option value='Franca'>Franca</option><option value='Alemanha'>Alemanha</option><option value='Italia'>Italia</option><option value='Reino Unido'>Reino Unido</option><option value='Outro'>Outro</option>" +
+          "</select>" +
+          "<input type='text' ng-model='form.state' placeholder='Estado' maxlength='80' required>" +
+          "<input type='text' ng-model='form.city' placeholder='Cidade' maxlength='100' required>" +
           "<button type='submit' class='bounce-btn'>Salvar Perfil</button>" +
         "</form>",
       link: function (scope) {
-        scope.form = angular.copy(scope.profile || { technical_level: "Supported" });
+        scope.maxBirthDate = new Date().toISOString().slice(0, 10);
+        scope.form = angular.copy(scope.profile || { role: "user" });
+        if (scope.form.birth_date && !(scope.form.birth_date instanceof Date)) {
+          var parsedBirthDate = new Date(scope.form.birth_date);
+          if (!isNaN(parsedBirthDate.getTime())) {
+            scope.form.birth_date = parsedBirthDate;
+          }
+        }
         scope.submit = function () {
           scope.onSave({ profilePayload: scope.form });
         };
