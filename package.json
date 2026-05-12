@@ -1,0 +1,10 @@
+{
+  "name": "helpon",
+  "private": true,
+  "version": "1.0.0",
+  "description": "HelpOn - Service Desk SPA (AngularJS + Supabase)",
+  "scripts": {},
+  "engines": {
+    "node": ">=18"
+  }
+}

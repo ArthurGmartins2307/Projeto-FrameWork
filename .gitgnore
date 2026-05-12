@@ -1,0 +1,9 @@
+node_modules/
+public/
+.env
+.env.local
+*.log
+
+# Vercel
+.vercel
+vercel.json
